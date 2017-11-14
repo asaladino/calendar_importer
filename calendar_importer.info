@@ -1,0 +1,5 @@
+name = Calendar Import
+description = This assists in the import of calendar events from a csv file.
+core = 7.x
+
+configure = admin/config/content/calendar-import

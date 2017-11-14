@@ -1,0 +1,146 @@
+<?php
+
+use CalendarImport\Controllers\ImportController;
+
+/**
+ * Autoload our module classes! Fun.
+ */
+spl_autoload_register(function ($class_name) {
+    $pos = strpos($class_name, 'CalendarImport\\');
+    if ($pos !== false) {
+        $classFile = '/' . str_replace('\\', '/',
+                str_replace('CalendarImport\\', '', $class_name)) . '.php';
+        /** @noinspection PhpIncludeInspection */
+        require_once dirname(__FILE__) . $classFile;
+    }
+});
+
+
+/**
+ * Load some assets for the module.
+ *
+ * @param $variables
+ */
+function calendar_importer_preprocess_html(/** @noinspection PhpUnusedParameterInspection */
+    &$variables)
+{
+    if (arg(0) == "admin") {
+        drupal_add_js(drupal_get_path('module',
+                'calendar_importer') . '/assets/js/app.js', ['cache' => false]);
+        drupal_add_css(drupal_get_path('module',
+                'calendar_importer') . '/assets/css/app.css', ['preprocess' => false]);
+    }
+}
+
+
+/**
+ * Implements hook_menu().
+ * Adds menu options to the configuration area for module access and sets up
+ * the form to save the settings.
+ */
+function calendar_importer_menu()
+{
+    $items = [];
+    $items['admin/config/content/calendar-import'] = [
+        'title' => 'Calendar Import',
+        'page callback' => 'calendar_import_index',
+        'description' => 'Import events into the calendar.',
+        'access arguments' => ['access administration pages'],
+        'type' => MENU_NORMAL_ITEM,
+    ];
+    $items['admin/config/content/calendar-import/index'] = [
+        'title' => 'Calendar Import',
+        'type' => MENU_DEFAULT_LOCAL_TASK,
+        'page callback' => 'calendar_import_index',
+        'access arguments' => ['access administration pages'],
+    ];
+    $items['admin/config/content/calendar-import/import'] = [
+        'page callback' => 'calendar_import_import',
+        'type' => MENU_CALLBACK,
+        'access arguments' => ['access content'],
+    ];
+    $items['admin/config/content/calendar-import/report'] = [
+        'page callback' => 'calendar_import_report',
+        'type' => MENU_CALLBACK,
+        'access arguments' => ['access content'],
+    ];
+
+
+    $items['admin/config/content/calendar-import/upload'] = [
+        'title' => 'CSV Upload',
+        'description' => t('Upload a csv file for import'),
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('calendar_import_upload_form'),
+        'type' => MENU_LOCAL_TASK,
+        'access arguments' => ['access content']
+    ];
+
+    return $items;
+}
+
+function calendar_import_index()
+{
+    $importController = new ImportController();
+    return $importController->index();
+}
+
+function calendar_import_report()
+{
+    $importController = new ImportController();
+    return $importController->report();
+}
+
+function calendar_import_import()
+{
+    $importController = new ImportController();
+    return $importController->import();
+}
+
+/**
+ * A form to upload the csv file to import.
+ */
+function calendar_import_upload_form($form, &$form_state)
+{
+    $form['csv_file'] = [
+        '#type' => 'file',
+        '#title' => t('CSV File'),
+        '#description' => t('Upload a csv export of the calendar to import.'),
+    ];
+    $form['submit'] = [
+        '#type' => 'submit',
+        '#value' => t('Submit'),
+    ];
+    return $form;
+}
+
+/**
+ * Make sure a csv file was uploaded.
+ * @param array $form
+ * @param array $form_state
+ */
+function calendar_import_upload_form_validate($form, &$form_state)
+{
+    $validators = array('file_validate_extensions' => array('csv'));
+    $file = file_save_upload('csv_file', $validators);
+    if (isset($file)) {
+        // File upload was attempted.
+        if ($file) {
+            // Put the temporary file in form_values so we can save it on submit.
+            $form_state['values']['csv_file_location'] = $file;
+        } else {
+            // File upload failed.
+            form_set_error('csv_upload', t('The file could not be uploaded.'));
+        }
+    }
+}
+
+/**
+ * Save the uploaded csv file.
+ */
+function calendar_import_upload_form_submit($form, &$form_state)
+{
+    $file = $form_state['values']['csv_file_location'];
+    $contents = file_get_contents($file->uri);
+    file_put_contents(dirname(__FILE__) . '/import/calendar.csv', $contents);
+    drupal_set_message(t('File has been uploaded.'));
+}
